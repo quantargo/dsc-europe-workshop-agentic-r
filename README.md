@@ -22,7 +22,8 @@ From a single LLM call to a data-analysis agent in R – and how to work with ag
 3. Set an API key in `~/.Renviron`, e.g.
 
    ```
-   ANTHROPIC_API_KEY=sk-ant-...
+   GEMINI_API_KEY=...          # free tier: https://aistudio.google.com/apikey
+   # or ANTHROPIC_API_KEY=sk-ant-...
    # or OPENAI_API_KEY=sk-...
    ```
 
