@@ -36,17 +36,72 @@ shinychat::chat_app(bare)
 # or in the console: live_console(bare)
 
 # 4. System prompts shape behaviour: code generation ---------------------------
-codr <- chat_google_gemini("Return only valid concise R code without markdown fences.")
-code <- codr$chat("Write a function to compute the rolling mean of a numeric vector.")
-clipr::write_clip(code)
+# Same task, three system prompts -> three very different solutions.
+task <- "Using the nycflights13 data: for summer flights (June to August) that
+were not cancelled, compute the average arrival delay per airline. Keep only
+airlines with at least 1000 such flights, add the full airline name from the
+airlines table and return the top 5, worst first."
 
-# Same task, different styles – compare readability, dependencies, speed
-codr$chat("Now the same in tidyverse style (slider/dplyr).")
-codr$chat("Now the same using data.table::frollmean().")
-codr$chat("Back to base R, but dependency-free and vectorised.")
-# Discussion: which one would you put into a package? Into a Shiny app?
+style_general <- "Return only valid concise R code without markdown fences."
+
+style_base <- "Use base R only (no packages except nycflights13)."
+codr <- chat_google_gemini( paste(style_general, style_base) )
+codr$chat(task)
+
+### Output
+library(nycflights13)
+
+summer <- flights[flights$month %in% 6:8 & !is.na(flights$arr_delay), ]
+counts <- table(summer$carrier)
+summer <- summer[summer$carrier %in% names(counts[counts >= 1000]), ]
+
+avg_delay <- aggregate(arr_delay ~ carrier, data = summer, mean)
+res <- merge(avg_delay, airlines, by = "carrier")
+res <- res[order(-res$arr_delay), ]
+head(res, 5)
+###
+
+style_dpylr <- "Use dplyr verbs and the native pipe |>."
+codr <- chat_google_gemini( paste(style_general, style_dpylr) )
+codr$chat(task)
+
+### Output
+library(nycflights13)
+library(dplyr)
+
+flights |>
+  filter(month %in% 6:8, !is.na(arr_delay)) |>
+  group_by(carrier) |>
+  summarise(avg_arr_delay = mean(arr_delay), n = n()) |>
+  filter(n >= 1000) |>
+  left_join(airlines, by = "carrier") |>
+  arrange(desc(avg_arr_delay)) |>
+  slice_head(n = 5)
+###
+
+style_data_table <- "Use data.table syntax DT[i, j, by]."
+codr <- chat_google_gemini( paste(style_general, style_data_table) )
+codr$chat(task)
+
+### Output
+library(data.table)
+library(nycflights13)
+
+as.data.table(airlines)[
+  as.data.table(flights)[month %in% 6:8 & !is.na(arr_delay), 
+    .(mean_arr_delay = mean(arr_delay), n = .N), by = carrier][n >= 1000], 
+  on = "carrier"
+][order(-mean_arr_delay), .(carrier, name, mean_arr_delay)][1:5]
+###
+
+
+
+# Do all three give the same top 5? (Watch how each handles NA delays.)
+# Discussion: which would you put into a package? Into a Shiny app?
 
 # 5. Switching providers is one line -------------------------------------------
 # chat <- chat_anthropic()
 # chat <- chat_openai()
 # chat <- chat_ollama(model = "llama3.2")   # local, no key needed
+
+

@@ -5,6 +5,7 @@ install.packages(c(
   "shinychat",    # chat UI (part 1)
   "clipr",        # copy generated code to clipboard (part 1)
   "nycflights13", # example data
+  "dplyr", "data.table", # code-style comparison (part 1)
   "duckdb", "DBI",
   "ggplot2",
   "vitals",       # evals (part 4, optional)

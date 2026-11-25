@@ -48,11 +48,14 @@ Put a QR code to the repo here. Give people 2–3 minutes during the intro.
 
 ```{mermaid}
 %%| eval: true
+%%| echo: false
+%%| fig-width: 11
+%%{init: {"flowchart": {"nodeSpacing": 60, "rankSpacing": 170, "padding": 30}, "themeVariables": {"fontSize": "30px"}}}%%
 flowchart LR
   U[Your question] --> M[LLM]
-  M -->|tool request| R[R runs the tool]
-  R -->|result| M
-  M -->|final answer| A[Answer]
+  M -->|"&nbsp;tool request&nbsp;"| R[R runs the tool]
+  R -->|"&nbsp;result&nbsp;"| M
+  M -->|"&nbsp;final answer&nbsp;"| A[Answer]
 ```
 
 - The **model decides** which tool to call – and when it is done
@@ -93,31 +96,122 @@ ellmer:::last_request_json()
 
 → Long conversations get slower and more expensive. Start fresh chats often.
 
+A chat UI in one line: `shinychat::chat_app(bare)`
+
 ## System prompts shape behaviour
 
 ```r
-codr <- chat_google_gemini(
-  "Return only valid concise R code without markdown fences."
-)
-codr$chat("Write a function to compute the rolling mean of a numeric vector.")
-codr$chat("Now the same using data.table::frollmean().")
+task <- "Using the nycflights13 data: for summer flights (June to August)
+that were not cancelled, compute the average arrival delay per airline.
+Keep only airlines with at least 1000 such flights, add the full airline
+name from the airlines table and return the top 5, worst first."
+
+style_general <- "Return only valid concise R code without markdown fences."
+style_base    <- "Use base R only (no packages except nycflights13)."
+
+codr <- chat_google_gemini(paste(style_general, style_base))
+codr$chat(task)
 ```
 
-And a chat UI in one line: `shinychat::chat_app(bare)`
+::: {style="font-size: 0.7em"}
+Then swap `style_base` for `"Use dplyr verbs and the native pipe |>."` or `"Use data.table syntax DT[i, j, by]."`
+:::
+
+## Same task, three answers
+
+::: {.panel-tabset}
+
+### base R
+
+```r
+summer <- flights[flights$month %in% 6:8 & !is.na(flights$arr_delay), ]
+counts <- table(summer$carrier)
+summer <- summer[summer$carrier %in% names(counts[counts >= 1000]), ]
+
+avg_delay <- aggregate(arr_delay ~ carrier, data = summer, mean)
+res <- merge(avg_delay, airlines, by = "carrier")
+res <- res[order(-res$arr_delay), ]
+head(res, 5)
+```
+
+### dplyr
+
+```r
+flights |>
+  filter(month %in% 6:8, !is.na(arr_delay)) |>
+  group_by(carrier) |>
+  summarise(avg_arr_delay = mean(arr_delay), n = n()) |>
+  filter(n >= 1000) |>
+  left_join(airlines, by = "carrier") |>
+  arrange(desc(avg_arr_delay)) |>
+  slice_head(n = 5)
+```
+
+### data.table
+
+```r
+as.data.table(airlines)[
+  as.data.table(flights)[month %in% 6:8 & !is.na(arr_delay),
+    .(mean_arr_delay = mean(arr_delay), n = .N), by = carrier][n >= 1000],
+  on = "carrier"
+][order(-mean_arr_delay), .(carrier, name, mean_arr_delay)][1:5]
+```
+
+:::
+
+::: {style="font-size: 0.7em"}
+Same result? Which would you put into a package – or a Shiny app?
+:::
 
 ## Structured output: text → data frame
 
+::: {style="font-size: 0.8em"}
 ```r
-type_review <- type_object(
-  airline   = type_string("Airline name"),
-  delayed   = type_boolean("Was the flight delayed?"),
-  sentiment = type_enum(c("positive", "neutral", "negative"))
+# Reviews of flights around Belgrade Nikola Tesla Airport (BEG)
+reviews <- c(
+  "Air Serbia JU 311 from Vienna to Belgrade landed 40 minutes late, but the crew was lovely.",
+  "Wizz Air from BEG to Dortmund: on time, but €45 extra for my cabin bag. 2/5.",
+  "Let Air Serbije iz Beograda za Podgoricu – sve savršeno, opet ću leteti s njima!",
+  "Swiss је изгубио мој пртљаг на лету из Београда за Цирих. Никад више!"
 )
 
-parallel_chat_structured(chat, as.list(reviews), type = type_review)
+type_review <- type_object(
+  airline   = type_string("Airline name"),
+  origin    = type_string("Origin airport IATA code (e.g. BEG), if mentioned", required = FALSE),
+  delayed   = type_boolean("Was the flight delayed?"),
+  sentiment = type_enum(c("positive", "neutral", "negative"), "Overall sentiment"),
+  issue     = type_string("Main complaint in 3 English words, if any", required = FALSE)
+)
+```
+:::
+
+::: {style="font-size: 0.7em"}
+English, Serbian Latin or Cyrillic in → English fields out, `Beograd`/`Београд` → `BEG`
+:::
+
+## One review or many
+
+```r
+chat <- chat_google_gemini()
+
+# One text
+chat$chat_structured(reviews[1], type = type_review)
+
+# Many texts in parallel -> directly a data frame
+parallel_chat_structured(chat, as.list(reviews), type = type_review, rpm = 10)
 ```
 
-→ `02_structured.R`
+::: {style="font-size: 0.7em"}
+`rpm = 10` keeps you under the Gemini free-tier rate limit. → `02_structured.R`
+:::
+
+::: {style="font-size: 0.75em"}
+**Exercises**
+
+1. Add a field `rating` (`type_number`, optional) and re-run
+2. Add `destination` and `language` – does it get `Цирих` → `ZRH` right?
+3. Write a review of your trip to DSC Europe and add it to `reviews`
+:::
 
 # Build an agent {background-color="#1f4e79"}
 
