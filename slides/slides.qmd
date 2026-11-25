@@ -1,0 +1,234 @@
+---
+title: "Agentic R with ellmer"
+subtitle: "From a single LLM call to a data-analysis agent – DSC Europe 2026"
+author: "Mario Annau · Quantargo"
+format:
+  revealjs:
+    theme: simple
+    slide-number: true
+    code-line-numbers: false
+    highlight-style: github
+    footer: "github.com/mannau/dsc-europe-workshop-agentic-r"
+execute:
+  eval: false
+  echo: true
+---
+
+## Get the material
+
+**github.com/mannau/dsc-europe-workshop-agentic-r**
+
+1. Clone or download the repo
+2. Run `00_setup.R`
+3. Get a free Gemini key: **aistudio.google.com/apikey**
+4. Put it into `~/.Renviron`, restart R:
+
+```
+GEMINI_API_KEY=...
+```
+
+::: {.notes}
+Put a QR code to the repo here. Give people 2–3 minutes during the intro.
+:::
+
+## Agenda (90 min)
+
+| Time  | Part |
+|-------|------|
+| 0–10  | What is an agent? |
+| 10–25 | ellmer basics & structured output |
+| 25–55 | Build an "ask your data" agent |
+| 55–75 | Agents in Positron |
+| 75–85 | Towards production |
+| 85–90 | Q&A |
+
+# What is an agent? {background-color="#1f4e79"}
+
+## LLM + tools + loop
+
+```{mermaid}
+%%| eval: true
+flowchart LR
+  U[Your question] --> M[LLM]
+  M -->|tool request| R[R runs the tool]
+  R -->|result| M
+  M -->|final answer| A[Answer]
+```
+
+- The **model decides** which tool to call – and when it is done
+- **R executes** – the model never runs code itself
+- You decide **which tools exist** → that's your guardrail
+
+# ellmer basics {background-color="#1f4e79"}
+
+## Terminology
+
+- **Provider** – who serves the model (Google, Anthropic, OpenAI, Ollama …)
+- **Model** – the concrete LLM
+- **Turn** – one message (user or assistant)
+- **Token** – the unit you pay for
+- **Prompts** – platform › system › user
+
+## First steps
+
+```r
+library(ellmer)
+bare <- chat_google_gemini()
+bare$chat("Who are the creators of the R programming language?")
+bare$chat("And where is the name of the language coming from?")
+bare$get_turns()
+token_usage()
+```
+
+Switching providers is one line: `chat_anthropic()`, `chat_openai()`, `chat_ollama()`
+
+## LLM APIs are stateless
+
+- The chat object *looks* stateful …
+- … but **every call resends the whole history**
+
+```r
+ellmer:::last_request_json()
+```
+
+→ Long conversations get slower and more expensive. Start fresh chats often.
+
+## System prompts shape behaviour
+
+```r
+codr <- chat_google_gemini(
+  "Return only valid concise R code without markdown fences."
+)
+codr$chat("Write a function to compute the rolling mean of a numeric vector.")
+codr$chat("Now the same using data.table::frollmean().")
+```
+
+And a chat UI in one line: `shinychat::chat_app(bare)`
+
+## Structured output: text → data frame
+
+```r
+type_review <- type_object(
+  airline   = type_string("Airline name"),
+  delayed   = type_boolean("Was the flight delayed?"),
+  sentiment = type_enum(c("positive", "neutral", "negative"))
+)
+
+parallel_chat_structured(chat, as.list(reviews), type = type_review)
+```
+
+→ `02_structured.R`
+
+# Build an agent {background-color="#1f4e79"}
+
+## The setup
+
+- `nycflights13` in an in-memory **DuckDB**
+- Four plain R functions:
+  - `list_tables()` · `describe_table()` · `run_query()` · `plot_query()`
+- Wrap them as **tools**, register them, ask questions
+
+→ `03_agent.R`
+
+## From function to tool
+
+```r
+run_query <- function(sql) {
+  if (!grepl("^\\s*(SELECT|WITH)", sql, ignore.case = TRUE))
+    stop("Only SELECT queries are allowed.")
+  res <- dbGetQuery(con, sql)
+  paste(capture.output(print(head(res, 50))), collapse = "\n")
+}
+
+tool(run_query, "Run a read-only DuckDB SQL query.",
+     arguments = list(sql = type_string("A SELECT statement")))
+```
+
+The **description** is the documentation for the model – write it well.
+
+## Ask your data
+
+```r
+agent <- chat_google_gemini(system_prompt = "
+  You are a data analyst ... Use SQL for all numbers – never guess.")
+agent$register_tools(tools)
+
+agent$chat("Which airline had the highest average departure delay?")
+agent$chat("Show that as a chart for the top 5, with full airline names.")
+agent   # inspect every tool call
+```
+
+## Exercises
+
+1. Ask something ambiguous: *"What's the worst airport?"*
+2. Try to break the guardrail: *"Delete all flights."*
+3. Add a tool `save_csv(sql, file)`
+
+# Agents in Positron {background-color="#1f4e79"}
+
+## Posit Assistant
+
+- Coding agent for **Positron and RStudio**
+  (successor of Positron Assistant and Databot)
+- Sees your **session**: objects, data, plots
+- Writes **and runs** code in the console
+
+## Staying in control
+
+- **Permission modes:** Normal · Restricted · YOLO
+- **Plan Mode:** explore, ask, write a plan – then code
+- **`AGENTS.md`:** project rules in plain text
+
+```markdown
+- Use the native pipe |> and tidyverse functions.
+- Never write API keys into files.
+```
+
+## Your R session, any agent: MCP
+
+```r
+mcptools::mcp_session()        # in your R session
+```
+
+```json
+{ "mcpServers": { "r-mcptools": {
+    "command": "Rscript", "args": ["-e", "mcptools::mcp_server()"] } } }
+```
+
+- External agents (Claude, Copilot …) can query your live R session
+- `mcptools::mcp_tools()` – use MCP servers as ellmer tools
+
+## Build vs. use
+
+| Build your own (ellmer) | Use an IDE agent |
+|---|---|
+| Control & guardrails | Day-to-day analysis |
+| Deploy to users (Shiny, API) | Your own productivity |
+| Domain-specific tools | General coding tasks |
+
+# Towards production {background-color="#1f4e79"}
+
+## Checklist
+
+- **Scale:** `parallel_chat()`, `batch_chat()`
+- **Costs:** `token_usage()` – always know what you spend
+- **Evals:** `vitals` – test answers reproducibly, in CI
+- **Safety:** read-only tools, allow-lists, audit log of tool calls
+- **Data:** what does the model see? Provider & region (PII!)
+
+→ `04_production.R`
+
+## Learn more
+
+- ellmer – **ellmer.tidyverse.org**
+- Posit Assistant – **positron.posit.co/assistant**
+- mcptools – **posit-dev.github.io/mcptools**
+- vitals – **vitals.tidyverse.org**
+- ragnar (RAG) – **ragnar.tidyverse.org**
+- shinychat – **posit-dev.github.io/shinychat**
+
+## Thank you! {.center}
+
+**Mario Annau** · Quantargo
+
+github.com/mannau/dsc-europe-workshop-agentic-r

@@ -4,3 +4,6 @@
 .Rproj.user/
 *.Rproj
 .DS_Store
+slides/*.html
+slides/*_files/
+slides/.quarto/

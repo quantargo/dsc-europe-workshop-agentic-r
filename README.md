@@ -15,6 +15,11 @@ From a single LLM call to a data-analysis agent in R – and how to work with ag
 | 75–85 | Towards production: parallel calls, costs, evals | `04_production.R` |
 | 85–90 | Q&A | – |
 
+## Slides
+
+Quarto reveal.js deck in `slides/slides.qmd` – render with
+`quarto render slides/slides.qmd` (or the Preview button in Positron).
+
 ## Setup
 
 1. R ≥ 4.1 and (ideally) Positron
