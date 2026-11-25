@@ -2,13 +2,13 @@
 library(ellmer)
 
 # 1. Scale: many prompts in parallel (or batch_chat() for cheaper async batches)
-chat <- chat_anthropic()
+chat <- chat_google_gemini()
 prompts <- list(
   "Summarise in one sentence: what is an LLM agent?",
   "Summarise in one sentence: what is tool calling?",
   "Summarise in one sentence: what is MCP?"
 )
-answers <- parallel_chat(chat, prompts)
+answers <- parallel_chat(chat, prompts, rpm = 10)  # free-tier friendly
 sapply(answers, function(x) x$last_turn()@text)
 
 # 2. Costs: always know what you spend
@@ -27,7 +27,7 @@ eval_data <- tibble(
 # solver: plain chat here – swap in the agent from 03_agent.R
 tsk <- Task$new(
   dataset = eval_data,
-  solver  = generate(chat_anthropic()),
+  solver  = generate(chat_google_gemini()),
   scorer  = model_graded_qa()
 )
 tsk$eval()

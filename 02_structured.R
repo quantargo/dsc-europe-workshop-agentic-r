@@ -17,12 +17,13 @@ type_review <- type_object(
   issue     = type_string("Main complaint in 3 words, if any", required = FALSE)
 )
 
-chat <- chat_anthropic()
+chat <- chat_google_gemini()
 
 # One text
 chat$chat_structured(reviews[1], type = type_review)
 
 # Many texts in parallel -> directly a data frame
-parallel_chat_structured(chat, as.list(reviews), type = type_review)
+# rpm keeps us under the Gemini free-tier rate limit
+parallel_chat_structured(chat, as.list(reviews), type = type_review, rpm = 10)
 
 # Exercise: add a field `rating` (type_number, optional) and re-run.

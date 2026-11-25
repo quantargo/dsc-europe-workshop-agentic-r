@@ -57,7 +57,7 @@ tools <- list(
 )
 
 # Step 3: the agent -------------------------------------------------------------
-agent <- chat_anthropic(system_prompt = "
+agent <- chat_google_gemini(system_prompt = "
 You are a data analyst with access to a DuckDB database of NYC flights (2013).
 Always inspect tables before querying them. Use SQL for all numbers – never guess.
 State which query your answer is based on. Keep answers short.
