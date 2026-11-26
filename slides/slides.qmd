@@ -8,7 +8,7 @@ format:
     slide-number: true
     code-line-numbers: false
     highlight-style: github
-    footer: "github.com/mannau/dsc-europe-workshop-agentic-r"
+    footer: "github.com/quantargo/dsc-europe-workshop-agentic-r"
 execute:
   eval: false
   echo: true
@@ -16,7 +16,7 @@ execute:
 
 ## Get the material
 
-**github.com/mannau/dsc-europe-workshop-agentic-r**
+**github.com/quantargo/dsc-europe-workshop-agentic-r**
 
 1. Clone or download the repo
 2. Run `00_setup.R`
@@ -325,4 +325,4 @@ mcptools::mcp_session()        # in your R session
 
 **Mario Annau** · Quantargo
 
-github.com/mannau/dsc-europe-workshop-agentic-r
+github.com/quantargo/dsc-europe-workshop-agentic-r

@@ -30,7 +30,7 @@ tsk <- Task$new(
   solver  = generate(chat_google_gemini()),
   scorer  = model_graded_qa()
 )
-tsk$eval()
+tsk$eval() # TODO: also set epochs!
 tsk$get_samples()
 
 # 4. Checklist before going live
